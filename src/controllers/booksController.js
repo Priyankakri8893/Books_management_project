@@ -1,63 +1,304 @@
+const { default: mongoose } = require('mongoose')
 const booksModel= require('../models/booksModel')
 const userModel= require('../models/userModel')
+const reviewModel= require('../models/reviewModel')
+const {isValid}= require('../validation/validator')
+const moment= require('moment')
+const validator= require('validator')
 
-// ### POST /books
-// - Create a book document from request body. Get userId in request body only.
-// - Make sure the userId is a valid userId by checking the user exist in the users collection.
-// - Return HTTP status 201 on a succesful book creation. Also return the book document. The response should be a JSON object like [this](#books) 
-// - Create atleast 10 books for each user
-// - Return HTTP status 400 for an invalid request with a response body like [this](#error-response-structure)
 
 const createBooks= async (req, res) => {
+    try {
+        let {title, excerpt, userId, ISBN, 
+            category, subcategory}= req.body
+    
+        if(!isValid(title) || !isValid(excerpt) || !isValid(userId) 
+        || !isValid(ISBN) || !isValid(category) || !isValid(subcategory)){
+            return res.status(400).send({
+                status: false,
+                message: 'please provide valid detail'
+            })
+        }
 
+        let userIdValid= mongoose.isValidObjectId(userId)
+        if(!userIdValid) return res.status(400).send({
+            status: false,
+            message: 'please provide valid userId'
+        })
+
+        //authorized
+        if(req["x-api-key"].userId != userId){
+            return res.status(403).send({
+                status: false,
+                message: "unauthorized, userId not same"
+            })
+        }
+
+        let isbnIsValid= validator.isISBN(ISBN)
+        if(!isbnIsValid) return res.status(400).send({
+            status: false,
+            message: 'please provide valid isbn'
+        })
+    
+        let titleAlreadyExit= await booksModel.findOne({title, isDeleted: false})
+        if(titleAlreadyExit) return res.status(404).send({
+            status: false,
+            message: 'title already exit'
+        })
+
+        let isbnAlreadyExit= await booksModel.findOne({ISBN, isDeleted: false})
+        if(isbnAlreadyExit) return res.status(404).send({
+            status: false,
+            message: 'ISBN already exit'
+        })
+    
+        // let userIdExit= await userModel.findOne({_id: userId})
+        // if(!userIdExit) return res.status(404).send({
+        //     status: false,
+        //     message: 'UserId not exit'
+        // }) //status
+
+        req.body.releasedAt= moment().format("YYYY-MM-DD")
+
+        const createBooks= await booksModel.create(req.body)
+        
+        res.status(201).send({
+            status: true,
+            data: createBooks
+        })
+    } catch (error) {
+        res.status(500).send({
+            status: false,
+            error: error.message
+        })
+    }
 }
 
-// ### GET /books
-// - Returns all books in the collection that aren't deleted. Return only book _id, title, excerpt, userId, category, releasedAt, reviews field. Response example [here](#get-books-response)
-// - Return the HTTP status 200 if any documents are found. The response structure should be like [this](#successful-response-structure) 
-// - If no documents are found then return an HTTP status 404 with a response like [this](#error-response-structure) 
-// - Filter books list by applying filters. Query param can have any combination of below filters.
-//   - By userId
-//   - By category
-//   - By subcategory
-//   example of a query url: books?filtername=filtervalue&f2=fv2
-// - Return all books sorted by book name in Alphabatical order
+// ********************************************************************************** //
 
 const getBooks= async (req, res) => {
+    try {
+        let {userId, category, subcategory}= req.query
 
+        let filterBooks= {isDeleted: false}
+
+        if(userId){
+            let userIdValid= mongoose.isValidObjectId(userId)
+        if(!userIdValid) return res.status(404).send({
+            status: false,
+            message: 'please provide valid userId'
+        })
+            filterBooks.userId= userId
+        }
+
+        if(category){
+            filterBooks.category= category
+        }
+
+        if(subcategory){
+            filterBooks.subcategory= subcategory
+        }
+
+        let getBooks= await booksModel.find(filterBooks)
+        .select({_id: 1, title: 1, excerpt: 1, userId: 1, 
+            category: 1, reviews: 1, releasedAt: 1})
+        .sort({title: 1})
+
+        if(getBooks.length === 0) return res.status(404).send({
+            status: false,
+            message: 'No books found'
+        })
+
+        res.status(200).send({
+            status: true,
+            data: getBooks
+        })
+    } catch (error) {
+        res.status(500).send({
+            status: false,
+            error: error.message
+        })
+    }
 }
 
-// ### GET /books/:bookId
-// - Returns a book with complete details including reviews. Reviews array would be in the form of Array. Response example [here](#book-details-response)
-// - Return the HTTP status 200 if any documents are found. The response structure should be like [this](#successful-response-structure) 
-// - If the book has no reviews then the response body should include book detail as shown [here](#book-details-response-no-reviews) and an empty array for reviewsData.
-// - If no documents are found then return an HTTP status 404 with a response like [this](#error-response-structure) 
+// ********************************************************************************** //
 
 const getBooksById= async (req, res) => {
+    try {
+        let {bookId}= req.params
 
+        if(!isValid(bookId)) return res.status(404)
+        .send({
+            status: false,
+            message: 'please provide bookId'
+        })
+
+        let bookIdValid= mongoose.isValidObjectId(bookId)
+        if(!bookIdValid) return res.status(404).send({
+            status: false,
+            message: 'please provide valid bookId'
+        })
+
+        let bookIdExit= await booksModel.findOne({_id: bookId, isDeleted: false}) 
+        if(!bookIdExit) return res.status(404).send({
+            status: false,
+            message: 'bookId not exit'
+        })
+        bookIdExit = bookIdExit.toObject()
+        let reviewsData= await reviewModel.find({bookId: bookIdExit._id})
+        
+        bookIdExit.reviewsData= reviewsData
+        bookIdExit.reviews= reviewsData.length
+
+        res.status(200).send({
+            status: true,
+            data: bookIdExit
+        })
+    } catch (error) {
+       res.status(500).send({
+        status: false,
+        error: error.message
+       }) 
+    }
 }
 
-// ### PUT /books/:bookId
-// - Update a book by changing its
-//   - title
-//   - excerpt
-//   - release date
-//   - ISBN
-// - Make sure the unique constraints are not violated when making the update
-// - Check if the bookId exists (must have isDeleted false and is present in collection). If it doesn't, return an HTTP status 404 with a response body like [this](#error-response-structure)
-// - Return an HTTP status 200 if updated successfully with a body like [this](#successful-response-structure) 
-// - Also make sure in the response you return the updated book document. 
+// ********************************************************************************** //
 
 const updateBooks= async (req, res) => {
+    try {
+        let {bookId}= req.params
 
+        if(!isValid(bookId)) return res.status(404)
+        .send({
+            status: false,
+            message: 'please provide bookId'
+        })
+
+        let bookIdValid= mongoose.isValidObjectId(bookId)
+        if(!bookIdValid) return res.status(400).send({
+            status: false,
+            message: 'please provide valid bookId'
+        })
+
+        let bookIdExit= await booksModel.findOne({_id: bookId, isDeleted: false})
+        if(!bookIdExit) return res.status(404).send({
+            status: false,
+            message: 'bookId not exit'
+        })
+
+        //authorization
+        if(req["x-api-key"].userId != bookIdExit.userId){
+            return res.status(403).send({
+                status: false,
+                message: "unauthorized, userId not same"
+            })
+        }
+
+        let {title, excerpt, ISBN}= req.body
+
+        if(Object.keys(req.body).length === 0){
+            return res.status(400).send({
+                status: false,
+                message: "please provide detail for update"
+            })
+        }
+
+        if(title){
+            if(!isValid(title)) {
+                return res.status(400).send({
+                    status: false,
+                    message: 'provide valid title'
+                })
+            }
+
+            bookIdExit.title= title
+        }
+
+        if(excerpt){
+            if(!isValid(excerpt)) {
+                return res.status(400).send({
+                    status: false,
+                    message: 'provide valid excerpt'
+                })
+            }
+
+            bookIdExit.excerpt= excerpt
+        }
+
+        if(ISBN){
+            if(!validator.isISBN(ISBN)) {
+                return res.status(400).send({
+                    status: false,
+                    message: 'provide valid ISBN'
+                })
+            }
+
+            bookIdExit.ISBN= ISBN
+        }
+
+        bookIdExit.releasedAt= moment().format("YYYY-MM-DD")
+        
+        const updateBooks= await bookIdExit.save()
+
+        res.status(200).send({
+            status: true,
+            data: updateBooks
+        })
+    } catch (error) {
+        res.status(500).send({
+            status: false,
+            error: error.message
+        })
+    }
 }
 
-// ### DELETE /books/:bookId
-// - Check if the bookId exists and is not deleted. If it does, mark it deleted and return an HTTP status 200 with a response body with status and message.
-// - If the book document doesn't exist then return an HTTP status of 404 with a body like [this](#error-response-structure) 
+// ********************************************************************************** //
 
 const deleteBooksById= async (req, res) => {
+    try {
+        let {bookId}= req.params
 
+        if(!isValid(bookId)) return res.status(404)
+        .send({
+            status: false,
+            message: 'please provide bookId'
+        })
+
+        let bookIdValid= mongoose.isValidObjectId(bookId)
+        if(!bookIdValid) return res.status(400).send({
+            status: false,
+            message: 'please provide valid bookId'
+        })
+
+        let bookIdExit= await booksModel.findOne({_id: bookId, isDeleted: false})
+        if(!bookIdExit) return res.status(400).send({
+            status: false,
+            message: 'bookId not exit'
+        })
+
+        //authorization
+        if(req["x-api-key"].userId != bookIdExit.userId){
+            return res.status(403).send({
+                status: false,
+                message: "unauthorized, userId not same"
+            })
+        }
+
+        bookIdExit.isDeleted= true
+        bookIdExit.deletedAt= new Date()
+
+        await bookIdExit.save()
+
+        res.status(200).send({
+            status: true,
+            message: ''
+        })
+    } catch (error) {
+        res.status(500).send({
+            status: false,
+            error: error.message
+        })
+    }
 }
 
-module.exports= {createBooks, getBooks, getBooksById, updateBooks, deleteBooksById}
+module.exports = {createBooks, getBooks,  getBooksById, updateBooks, deleteBooksById}
