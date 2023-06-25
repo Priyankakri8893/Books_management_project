@@ -1,10 +1,7 @@
-# Technetium
+# Project - Books Management
+The goal of this project is to develop a book and review management system. It includes APIs for user, book, and review operations, as well as authentication and authorization mechanisms to ensure authorized access for creating, editing, and deleting books.
 
 ## Project - Books Management
-
-### Key points
--  Branch name should follow the naming convention `project/booksManagement`
-- Follow the naming conventions exactly as instructed.
 
 ### Models
 - User Model
@@ -134,10 +131,9 @@
 - In case of unauthorized access return an appropirate error message.
 
 ## Testing 
-- To test these apis create a new collection in Postman named Project 4 Books Management 
+- To test these apis create a new collection in Postman 
 - Each api should have a new request in this collection
 - Each request in the collection should be rightly named. Eg Create user, Create book, Get books etc
-- Each member of each team should have their tests in running state
 
 Refer below sample
  ![A Postman collection and request sample](assets/Postman-collection-sample.png)
