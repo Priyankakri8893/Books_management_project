@@ -6,14 +6,21 @@ const {isValid}= require('../validation/validator')
 const moment= require('moment')
 const validator= require('validator')
 
-
+const dateFormat = 'YYYY-MM-DD'
 const createBooks= async (req, res) => {
     try {
         let {title, excerpt, userId, ISBN, 
-            category, subcategory}= req.body
+            category, subcategory, releasedAt}= req.body
     
         if(!isValid(title) || !isValid(excerpt) || !isValid(userId) 
         || !isValid(ISBN) || !isValid(category) || !isValid(subcategory)){
+            return res.status(400).send({
+                status: false,
+                message: 'please provide valid detail'
+            })
+        }
+        
+        if(!releasedAt || !moment(releasedAt, dateFormat, true).isValid()){
             return res.status(400).send({
                 status: false,
                 message: 'please provide valid detail'
@@ -27,38 +34,38 @@ const createBooks= async (req, res) => {
         })
 
         //authorized
-        if(req["x-api-key"].userId != userId){
-            return res.status(403).send({
-                status: false,
-                message: "unauthorized, userId not same"
-            })
-        }
+        // if(req["x-api-key"].userId != userId){
+        //     return res.status(403).send({
+        //         status: false,
+        //         message: "unauthorized, userId not same"
+        //     })
+        // }
 
-        let isbnIsValid= validator.isISBN(ISBN)
-        if(!isbnIsValid) return res.status(400).send({
-            status: false,
-            message: 'please provide valid isbn'
-        })
+        // let isbnIsValid= validator.isISBN(ISBN)
+        // if(!isbnIsValid) return res.status(400).send({
+        //     status: false,
+        //     message: 'please provide valid isbn'
+        // })
     
         let titleAlreadyExit= await booksModel.findOne({title, isDeleted: false})
-        if(titleAlreadyExit) return res.status(404).send({
+        if(titleAlreadyExit) return res.status(400).send({
             status: false,
             message: 'title already exit'
         })
 
         let isbnAlreadyExit= await booksModel.findOne({ISBN, isDeleted: false})
-        if(isbnAlreadyExit) return res.status(404).send({
+        if(isbnAlreadyExit) return res.status(400).send({
             status: false,
             message: 'ISBN already exit'
         })
     
-        // let userIdExit= await userModel.findOne({_id: userId})
-        // if(!userIdExit) return res.status(404).send({
-        //     status: false,
-        //     message: 'UserId not exit'
-        // }) //status
+        let userIdExit= await userModel.findOne({_id: userId})
+        if(!userIdExit) return res.status(404).send({
+            status: false,
+            message: 'UserId not exit'
+        }) 
 
-        req.body.releasedAt= moment().format("YYYY-MM-DD")
+        // req.body.releasedAt= moment().format("YYYY-MM-DD")
 
         const createBooks= await booksModel.create(req.body)
         
@@ -134,7 +141,7 @@ const getBooksById= async (req, res) => {
         })
 
         let bookIdValid= mongoose.isValidObjectId(bookId)
-        if(!bookIdValid) return res.status(404).send({
+        if(!bookIdValid) return res.status(400).send({
             status: false,
             message: 'please provide valid bookId'
         })
@@ -145,7 +152,7 @@ const getBooksById= async (req, res) => {
             message: 'bookId not exit'
         })
         bookIdExit = bookIdExit.toObject()
-        let reviewsData= await reviewModel.find({bookId: bookIdExit._id})
+        let reviewsData= await reviewModel.find({bookId: bookIdExit._id, isDeleted: false})
         
         bookIdExit.reviewsData= reviewsData
         bookIdExit.reviews= reviewsData.length
@@ -194,7 +201,8 @@ const updateBooks= async (req, res) => {
             })
         }
 
-        let {title, excerpt, ISBN}= req.body
+        let {title, excerpt, userId, ISBN, 
+            category, subcategory, releasedAt}= req.body
 
         if(Object.keys(req.body).length === 0){
             return res.status(400).send({
@@ -210,6 +218,11 @@ const updateBooks= async (req, res) => {
                     message: 'provide valid title'
                 })
             }
+            let titleAlreadyExit= await booksModel.findOne({title, isDeleted: false})
+        if(titleAlreadyExit) return res.status(400).send({
+            status: false,
+            message: 'title already exit'
+        })
 
             bookIdExit.title= title
         }
@@ -226,17 +239,70 @@ const updateBooks= async (req, res) => {
         }
 
         if(ISBN){
-            if(!validator.isISBN(ISBN)) {
-                return res.status(400).send({
-                    status: false,
-                    message: 'provide valid ISBN'
-                })
-            }
+            // if(!validator.isISBN(ISBN)) {
+            //     return res.status(400).send({
+            //         status: false,
+            //         message: 'provide valid ISBN'
+            //     })
+            // }
+            let isbnAlreadyExit= await booksModel.findOne({ISBN, isDeleted: false})
+        if(isbnAlreadyExit) return res.status(400).send({
+            status: false,
+            message: 'ISBN already exit'
+        })
 
             bookIdExit.ISBN= ISBN
         }
 
-        bookIdExit.releasedAt= moment().format("YYYY-MM-DD")
+        if(userId){
+            let userIdValid= mongoose.isValidObjectId(userId)
+        if(!userIdValid) return res.status(400).send({
+            status: false,
+            message: 'please provide valid userId'
+        })
+            let userIdExit= await userModel.findOne({_id: userId})
+        if(!userIdExit) return res.status(404).send({
+            status: false,
+            message: 'UserId not exit'
+        }) 
+
+            bookIdExit.userId= userId
+        }
+
+        if(releasedAt){
+            if(!releasedAt || !moment(releasedAt, dateFormat, true).isValid()){
+                return res.status(400).send({
+                    status: false,
+                    message: 'please provide valid releasedAt'
+                })
+            }
+
+            bookIdExit.releasedAt= releasedAt
+        }
+
+        if(subcategory){
+            if(!isValid(subcategory)) {
+                return res.status(400).send({
+                    status: false,
+                    message: 'provide valid subcategory'
+                })
+            }
+
+            bookIdExit.subcategory= subcategory
+        }
+
+        if(category){
+            if(!isValid(category)) {
+                return res.status(400).send({
+                    status: false,
+                    message: 'provide valid category'
+                })
+            }
+
+            bookIdExit.category= category
+        }
+
+        // bookIdExit.releasedAt= moment().format("YYYY-MM-DD")
         
         const updateBooks= await bookIdExit.save()
 
@@ -258,7 +324,7 @@ const deleteBooksById= async (req, res) => {
     try {
         let {bookId}= req.params
 
-        if(!isValid(bookId)) return res.status(404)
+        if(!isValid(bookId)) return res.status(400)
         .send({
             status: false,
             message: 'please provide bookId'
@@ -271,7 +337,7 @@ const deleteBooksById= async (req, res) => {
         })
 
         let bookIdExit= await booksModel.findOne({_id: bookId, isDeleted: false})
-        if(!bookIdExit) return res.status(400).send({
+        if(!bookIdExit) return res.status(404).send({
             status: false,
             message: 'bookId not exit'
         })
