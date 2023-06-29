@@ -6,11 +6,15 @@ const {isValid}= require('../validation/validator')
 const moment= require('moment')
 const validator= require('validator')
 
+const {uploadFile}= require("../awss3/awsS3")
+
 const dateFormat = 'YYYY-MM-DD'
 const createBooks= async (req, res) => {
     try {
         let {title, excerpt, userId, ISBN, 
             category, subcategory, releasedAt}= req.body
+
+            
     
         if(!isValid(title) || !isValid(excerpt) || !isValid(userId) 
         || !isValid(ISBN) || !isValid(category) || !isValid(subcategory)){
@@ -19,6 +23,8 @@ const createBooks= async (req, res) => {
                 message: 'please provide valid detail'
             })
         }
+
+        
         
         if(!releasedAt || !moment(releasedAt, dateFormat, true).isValid()){
             return res.status(400).send({
@@ -66,6 +72,15 @@ const createBooks= async (req, res) => {
         }) 
 
         // req.body.releasedAt= moment().format("YYYY-MM-DD")
+
+        let files = req.files;
+    if (files && files.length > 0) {
+      let uploadedFileURL = await uploadFile(files[0]);
+      req.body.bookCover= uploadedFileURL
+    //   return res.status(201).send({msg: "File uploaded successfully", data: uploadedFileURL, file: files});
+    } else {
+      return res.status(400).send({msg: "No file found"});
+    }
 
         const createBooks= await booksModel.create(req.body)
         
