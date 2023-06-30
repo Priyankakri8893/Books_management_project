@@ -5,6 +5,10 @@ require('dotenv').config()
 const {MONGO_URI}  = process.env
 const app= express()
 
+const multer= require("multer");
+const { AppConfig } = require('aws-sdk');
+
+app.use( multer().any())
 app.use(express.json())
 app.use(express.urlencoded({extended: true}))
 
